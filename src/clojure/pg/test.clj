@@ -52,17 +52,17 @@
 
 (def enum-?-states #'enum-*-states)
 
-(defn enum-states
-    "Determines the possible states reachable from the current state by epsilon transitions."
+(defn epsilon-transitions1
+    "Determines the possible states reachable by one epsilon transition from the current state."
     [regex path]
     (let [rule (in-regex regex path)]
         (cond
             (string? rule)
                 ; literal
-                (list path)
+                nil
             (symbol? rule)
-                ; TODO: meta-token
-                (list path)
+                ; TODO: expand meta-token
+                nil
             (list? rule)
                 (let [[op & rest] rule]
                     (condp = op
@@ -75,6 +75,17 @@
             :else
                 (list (util/append path 0)) )))
 
+(defn enum-states
+    "Enumerates all possible states after applying the maximum number of epsilon transitions from the specified state."
+    [regex path]
+    (util/prrn (if-let [expansions (epsilon-transitions1 regex path)]
+        (mapcat #(enum-states regex %) expansions)
+        (list path))))
+
+(defn transition-literals
+    ""
+    [regex path]
+    (map #(in-regex regex %) (enum-states regex path)))
 
 ; java lexical grammar from
 ; http://java.sun.com/docs/books/jls/second_edition/html/lexical.doc.html
