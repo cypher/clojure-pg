@@ -63,7 +63,7 @@
             (symbol? rule)
                 ; TODO: expand meta-token
                 nil
-            (list? rule)
+            (seq? rule)
                 (let [[op & rest] rule]
                     (condp = op
                         '| (enum-or-states path rest)
@@ -87,14 +87,29 @@
     [regex path]
     (map #(in-regex regex %) (enum-states regex path)))
 
+(def expand-meta-tokens)
+
+(defn- expand-meta-token
+    [rule meta-tokens]
+    (cond
+        (symbol? rule)
+            (or (meta-tokens rule) rule)
+        (list? rule)
+            (expand-meta-tokens rule meta-tokens)
+        :else
+            rule))
+
+(defn expand-meta-tokens
+    [rule meta-tokens]
+    (map #(expand-meta-token % meta-tokens) rule))
+
 ; java lexical grammar from
 ; http://java.sun.com/docs/books/jls/second_edition/html/lexical.doc.html
 
 (def *java-meta-tokens*
-    (vector
-        ['LineTerminator '(| "\r" "\n" "\r\n" )]
-        ['DecimalDigit (list* '| (range 0 10))]
-    ))
+    (hash-map
+        'LineTerminator '(| "\r" "\n" "\r\n" )
+        'DecimalDigit (list* '| (map str (range 0 10)))))
 
 (def *java-tokens*
     (concat
