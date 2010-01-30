@@ -40,7 +40,6 @@
 
 (defn- enum-or-states
     [path rules]
-    (prn path rules)
     (map #(util/append path %) (range 1 (inc (count rules)))))
 
 (defn- enum-*-states
