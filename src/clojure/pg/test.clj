@@ -103,8 +103,7 @@
             '(FLOAT
                 (|
                     ((+ DecimalDigit) "." (* DecimalDigit))
-                    ((* DecimalDigit) "." (+ DecimalDigit)))))
-    ))
+                    ((* DecimalDigit) "." (+ DecimalDigit)))))))
 
 ; basic java grammar taken from
 ; http://java.sun.com/docs/books/jls/second_edition/html/syntax.doc.html
