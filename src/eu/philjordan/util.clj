@@ -217,3 +217,8 @@
 	"Determines whether the string s starts with prefix."
 	[s prefix]
 	(. s (startsWith prefix)))
+
+(defn append
+	"Appends an element to end of a list"
+	[seq elem]
+	(concat seq (list elem)))
