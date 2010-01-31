@@ -222,3 +222,8 @@
 	"Appends an element to end of a list"
 	[seq elem]
 	(concat seq (list elem)))
+
+(defn set-conj
+	"like conj, but defaults to a set instead of a list when coll is nil"
+	[coll & xs]
+	(apply conj (or coll #{}) xs))
