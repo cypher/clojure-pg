@@ -4,6 +4,11 @@
     ; (:import eu.philjordan.util/prrn)
     )
 
+(defstruct fsm-state
+    :state          ;; Set with regex name and paths
+    :transitions    ;; Map with all characters the machine can transition to from this state.
+                    ;; The value is the index of the resulting state
+    )
 
 (defn ltok
     "generate a token spec for a literal token; the token will use the uppercased string for its symbol"
@@ -128,11 +133,13 @@
 
 (defn initial-state
     [token-specs meta-tokens]
-    (mapcat
-        (fn
-            [[name & rule]]
-            (flatten-paths name (enum-states (expand-meta-tokens rule meta-tokens) nil)))
-        token-specs))
+    (struct fsm-state
+        (reduce
+            (fn
+                [set [name & rule]]
+                (apply conj set (flatten-paths name (enum-states (expand-meta-tokens rule meta-tokens) nil))))
+            #{}
+            token-specs)))
 
 (defn token-rule-map
     [tokens meta-tokens]
@@ -144,13 +151,60 @@
         (fn
             [char-map [name path]]
             (let [rule (token-map name)]
-                (update-in
+                (if (= :eot path)
                     char-map
-                    [(in-rule rule path)]
-                    concat
-                    (flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path))))))
+                    (update-in
+                        char-map
+                        [(in-rule rule path)]
+                        #(apply util/set-conj %1 %2)
+                        (flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path)))))))
         {}
         states))
+
+(defn register-state-from-transition
+    [[state-vector state-map] state]
+    (if (state-map state)
+        [state-vector state-map]
+        [(assoc state-vector (count state-vector) (struct-map fsm-state :state state :transitions {}))
+         (assoc state-map state (count state-vector))]))
+
+(defn register-state-transitions
+    [from-state transitions state-vector state-map]
+    (let [from-state-idx (state-map (:state from-state))]
+        (reduce
+            (fn
+                [v [char state]]
+                (update-in
+                    v
+                    [from-state-idx :transitions]
+                    assoc
+                    char (state-map state)))
+            state-vector
+            transitions)))
+
+(defn register-states
+    [from-state transition-map state-vector state-map]
+    (let
+        [states (vals transition-map)
+         [state-vector state-map]
+            (reduce
+                register-state-from-transition
+                [state-vector state-map]
+                states)
+         state-vector (register-state-transitions from-state transition-map state-vector state-map)]
+        [state-vector state-map]))
+
+(defn generate-state-machine
+    [tokens meta-tokens]
+    (loop [state-vector [(initial-state tokens meta-tokens)]
+           state-map {(:state (state-vector 0)) 0}
+           idx 0]
+        (if (>= idx (count state-vector))
+            [state-vector state-map]
+            (let [current-state (state-vector idx)
+                  transition-map (create-char-transition-map (:state current-state) (token-rule-map tokens meta-tokens))
+                  [state-vector state-map] (register-states current-state transition-map state-vector state-map)]
+                (recur state-vector state-map (inc idx))))))
 
 ; java lexical grammar from
 ; http://java.sun.com/docs/books/jls/second_edition/html/lexical.doc.html
