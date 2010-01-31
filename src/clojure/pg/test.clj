@@ -102,7 +102,7 @@
 
 (defn expand-meta-tokens
     [rule meta-tokens]
-    (map #(expand-meta-token % meta-tokens) rule))
+    (map #(#'expand-meta-token % meta-tokens) rule))
 
 ; java lexical grammar from
 ; http://java.sun.com/docs/books/jls/second_edition/html/lexical.doc.html
