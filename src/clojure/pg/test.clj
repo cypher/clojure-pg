@@ -10,30 +10,31 @@
     [s]
     [(symbol (. s toUpperCase)) s])
 
+(defn in-rule
+    ""
+    [rule path]
+    (if (not-empty path)
+           (recur (nth rule (first path)) (rest path))
+           rule))
+
 (defn in-regex
     "obtains the sub-rule at the specified location in the given regular expression. Locations are specified as a vector of indices into the tree."
     [[name & rules] path]
-    (loop [rule rules
-           path path]
-           ;; (prn path rule)
-           (if (not-empty path)
-               (recur (nth rule (first path)) (rest path))
-               rule)))
-
+    (in-rule rules path))
 
 (defn- advance-path
-    [regex path]
+    [rule path]
     (let [prefix (drop-last path)
           tail-idx (last path)
           tail (util/append prefix (inc tail-idx))
-          op (in-regex regex (util/append prefix 0))]
+          op (in-rule rule (util/append prefix 0))]
         (cond
             (= '| op)
-                (recur regex prefix)
-            (empty? (in-regex regex tail))
+                (recur rule prefix)
+            (empty? (rest-rule rule tail))
                 (if (#{'+ '*} op) 
-                    (util/append (advance-path regex prefix) (util/append prefix 1))
-                    (recur regex prefix))
+                    (util/append (advance-path rule prefix) (util/append prefix 1))
+                    (recur rule prefix))
             :else
                 tail
             )))
@@ -43,8 +44,8 @@
     (map #(util/append path %) (range 1 (inc (count rules)))))
 
 (defn- enum-*-states
-    [regex path]
-    (list (util/append path 1) (advance-path regex path)))
+    [rule path]
+    (list* (util/append path 1) (advance-path rule path)))
 
 (defn- enum-+-states
     [path]
@@ -54,8 +55,8 @@
 
 (defn epsilon-transitions1
     "Determines the possible states reachable by one epsilon transition from the current state."
-    [regex path]
-    (let [rule (in-regex regex path)]
+    [start-rule path]
+    (let [rule (in-rule start-rule path)]
         (cond
             (string? rule)
                 ; literal
@@ -67,25 +68,25 @@
                 (let [[op & rest] rule]
                     (condp = op
                         '| (enum-or-states path rest)
-                        '* (enum-*-states regex path)
+                        '* (enum-*-states start-rule path)
                         '+ (enum-+-states path)
                         ;; '! '() ;; not yet implemented/used
-                        '? (enum-?-states regex path)
+                        '? (enum-?-states start-rule path)
                         (list (util/append path 0)) ))
             :else
                 (list (util/append path 0)) )))
 
 (defn enum-states
     "Enumerates all possible states after applying the maximum number of epsilon transitions from the specified state."
-    [regex path]
-    (util/prrn (if-let [expansions (epsilon-transitions1 regex path)]
-        (mapcat #(enum-states regex %) expansions)
+    [rule path]
+    (util/prrn (if-let [expansions (epsilon-transitions1 rule path)]
+        (mapcat #(enum-states rule %) expansions)
         (list path))))
 
 (defn transition-literals
     ""
-    [regex path]
-    (map #(in-regex regex %) (enum-states regex path)))
+    [rule path]
+    (map #(in-rule rule %) (enum-states rule path)))
 
 (def expand-meta-tokens)
 
