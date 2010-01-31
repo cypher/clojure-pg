@@ -17,6 +17,11 @@
            (recur (nth rule (first path)) (rest path))
            rule))
 
+(defn rest-rule
+    ""
+    [rule path]
+    (drop (last path) (in-rule rule (drop-last path))))
+
 (defn in-regex
     "obtains the sub-rule at the specified location in the given regular expression. Locations are specified as a vector of indices into the tree."
     [[name & rules] path]
@@ -32,11 +37,15 @@
             (= '| op)
                 (recur rule prefix)
             (empty? (rest-rule rule tail))
-                (if (#{'+ '*} op) 
-                    (util/append (advance-path rule prefix) (util/append prefix 1))
-                    (recur rule prefix))
+                (cond
+                    (#{'+ '*} op)
+                        (util/append (advance-path rule prefix) (util/append prefix 1))
+                    (empty? prefix)
+                        (list :eot)
+                    :else
+                        (recur rule prefix))
             :else
-                tail
+                (list tail)
             )))
 
 (defn- enum-or-states
@@ -58,7 +67,7 @@
     [start-rule path]
     (let [rule (in-rule start-rule path)]
         (cond
-            (string? rule)
+            (char? rule)
                 ; literal
                 nil
             (symbol? rule)
@@ -79,9 +88,11 @@
 (defn enum-states
     "Enumerates all possible states after applying the maximum number of epsilon transitions from the specified state."
     [rule path]
-    (util/prrn (if-let [expansions (epsilon-transitions1 rule path)]
-        (mapcat #(enum-states rule %) expansions)
-        (list path))))
+    (if (= path :eot)
+        (list path)
+        (if-let [expansions (epsilon-transitions1 rule path)]
+            (mapcat #(enum-states rule %) expansions)
+            (list path))))
 
 (defn transition-literals
     ""
@@ -94,15 +105,52 @@
     [rule meta-tokens]
     (cond
         (symbol? rule)
-            (or (meta-tokens rule) rule)
-        (list? rule)
+            (or
+                (expand-meta-token (meta-tokens rule) meta-tokens)
+                rule)
+        (seq? rule)
             (expand-meta-tokens rule meta-tokens)
+        (string? rule)
+            ;; No need to use a list for one-character rules
+            (if (= (count rule) 1)
+                (first rule)
+                (seq rule))
         :else
             rule))
 
 (defn expand-meta-tokens
     [rule meta-tokens]
     (map #(#'expand-meta-token % meta-tokens) rule))
+
+(defn- flatten-paths
+    [name paths]
+    (map #(list name %) paths))
+
+(defn initial-state
+    [token-specs meta-tokens]
+    (mapcat
+        (fn
+            [[name & rule]]
+            (flatten-paths name (enum-states (expand-meta-tokens rule meta-tokens) nil)))
+        token-specs))
+
+(defn token-rule-map
+    [tokens meta-tokens]
+    (reduce (fn [m [name & rule]] (assoc m name (expand-meta-tokens rule meta-tokens))) {} tokens))
+
+(defn create-char-transition-map
+    [states token-map]
+    (reduce
+        (fn
+            [char-map [name path]]
+            (let [rule (token-map name)]
+                (update-in
+                    char-map
+                    [(in-rule rule path)]
+                    concat
+                    (flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path))))))
+        {}
+        states))
 
 ; java lexical grammar from
 ; http://java.sun.com/docs/books/jls/second_edition/html/lexical.doc.html
