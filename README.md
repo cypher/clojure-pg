@@ -17,3 +17,5 @@ License
 -------
 
 `clojure-pg` is dual-licensed under the BSD License (see file `COPYING`) and the Eclipse Public License v1.0 (see file `epl-v10.html`).
+
+The code under `eu.philjordan.util` is (c) 2009-2010 Phillip Jordan, and is licensed under the same terms as clojure-pg.
