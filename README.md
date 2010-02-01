@@ -1,5 +1,5 @@
-`clojure-pg`
-============
+clojure-pg
+==========
 
 `clojure-pg` is a parser generator written in Clojure.
 
