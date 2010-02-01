@@ -1,4 +1,4 @@
-(ns clojure.pg.test
+(ns at.metalab.clojure.pg.test
     ; (:require [eu.philjordan.util :as util])
     (:use [eu.philjordan.util :as util :only (prrn)])
     ; (:import eu.philjordan.util/prrn)

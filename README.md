@@ -9,8 +9,8 @@ Usage
 -----
 
 * Open a Clojure REPL in the src directory. Make sure the CLASSPATH includes the current working directory (i.e. "`.`")
-* Load the `clojure.pg.test` namespace: `(require 'clojure.pg.test)`
-* Change into the `clojure.pg.test` namespace: `(ns clojure.pg.test)`
+* Load the `at.metalab.clojure.pg.test` namespace: `(require 'at.metalab.clojure.pg.test)`
+* Change into the `at.metalab.clojure.pg.test` namespace: `(ns at.metalab.clojure.pg.test)`
 * Generate a state machine for the lexer based on a small subset of Java tokens: `(generate-state-machine *java-tokens* *java-meta-tokens*)`
 
 License
