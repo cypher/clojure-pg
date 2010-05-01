@@ -227,3 +227,18 @@
 	"like conj, but defaults to a set instead of a list when coll is nil"
 	[coll & xs]
 	(apply conj (or coll #{}) xs))
+
+(defn codepoint-seq
+	"Returns a seq of unicode code points in the string. Start-idx is the code unit index at which to start, defaulting to 0."
+	([s]
+		(codepoint-seq s 0))
+	([s start-idx]
+		(when (< start-idx (count s))
+			(lazy-seq
+				(let [cp (. s (codePointAt start-idx))]
+					(cons cp
+						(codepoint-seq s (if (> cp 65535) (+ 2 start-idx) (inc start-idx)))))))))
+
+(defn codepoint-array
+	"Returns the code points constituting the string as an array of ints"
+	[s] (int-array (codepoint-seq s)))
