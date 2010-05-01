@@ -206,8 +206,8 @@
                   [state-vector state-map] (register-states current-state transition-map state-vector state-map)]
                 (recur state-vector state-map (inc idx))))))
 
-; java lexical grammar from
-; http://java.sun.com/docs/books/jls/second_edition/html/lexical.doc.html
+; java lexical structure from
+; http://java.sun.com/docs/books/jls/third_edition/html/lexical.html
 
 (def *java-meta-tokens*
     (hash-map
