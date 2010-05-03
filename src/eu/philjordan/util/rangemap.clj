@@ -61,8 +61,10 @@
 ;		(rangemap/char-range \A \Z) "ucase")
 (defn char-range
 	"Inclusive character range"
-	[from to]
-	[from (char (inc (int to)))])
+	([from to]
+		[from (char (inc (int to)))])
+	([single-char]
+		(char-range single-char single-char)))
 
 (defn overlaps
 	"Returns a seq of all ranges in the rmap overlapped by the given range"
