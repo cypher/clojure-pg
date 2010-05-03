@@ -1,5 +1,5 @@
 (ns at.metalab.clojure.pg.test
-    ; (:require [eu.philjordan.util :as util])
+    (:require [eu.philjordan.util.rangemap :as rangemap])
     (:use [eu.philjordan.util :as util :only (prrn)])
     ; (:import eu.philjordan.util/prrn)
     )
@@ -16,11 +16,11 @@
     [(symbol (. s toUpperCase)) s])
 
 (defn in-rule
-    ""
-    [rule path]
-    (if (not-empty path)
-           (recur (nth rule (first path)) (rest path))
-           rule))
+	""
+	[rule path]
+	(if (not-empty path)
+		(recur (nth rule (first path)) (rest path))
+		rule))
 
 (defn rest-rule
     ""
@@ -68,27 +68,35 @@
 (def enum-?-states #'enum-*-states)
 
 (defn epsilon-transitions1
-    "Determines the possible states reachable by one epsilon transition from the current state."
-    [start-rule path]
-    (let [rule (in-rule start-rule path)]
-        (cond
-            (char? rule)
-                ; literal
-                nil
-            (symbol? rule)
-                ; TODO: expand meta-token
-                nil
-            (seq? rule)
-                (let [[op & rest] rule]
-                    (condp = op
-                        '| (enum-or-states path rest)
-                        '* (enum-*-states start-rule path)
-                        '+ (enum-+-states path)
-                        ;; '! '() ;; not yet implemented/used
-                        '? (enum-?-states start-rule path)
-                        (list (util/append path 0)) ))
-            :else
-                (list (util/append path 0)) )))
+	"Determines the possible states reachable by one epsilon transition from the current state."
+	[start-rule path]
+	(let [rule (in-rule start-rule path)]
+		(cond
+			(char? rule)
+				; literal
+				nil
+			(symbol? rule)
+				; TODO: expand meta-token
+				nil
+			(and (vector? rule) (keyword? (first rule)))
+				; some higher-level named rule
+				(let [rulename (first rule)]
+					(condp = rulename
+						; don't touch character ranges, they are processed in create-char-transition-map
+						:range nil
+						; don't do anything to unknown rules, create-char-transition-map will generate a warning.
+						nil))
+			(seq? rule)
+				(let [[op & rest] rule]
+					(condp = op
+						'| (enum-or-states path rest)
+						'* (enum-*-states start-rule path)
+						'+ (enum-+-states path)
+						;; '! '() ;; not yet implemented/used
+						'? (enum-?-states start-rule path)
+						(list (util/append path 0)) ))
+			:else
+				(list (util/append path 0)) )))
 
 (defn enum-states
     "Enumerates all possible states after applying the maximum number of epsilon transitions from the specified state."
@@ -132,34 +140,55 @@
     (map #(list name %) paths))
 
 (defn initial-state
-    [token-specs meta-tokens]
-    (struct fsm-state
-        (reduce
-            (fn
-                [set [name & rule]]
-                (apply conj set (flatten-paths name (enum-states (expand-meta-tokens rule meta-tokens) nil))))
-            #{}
-            token-specs)))
+	"Generates the fsm-state before any characters have been consumed, where all
+	 rules are in null positions, and no transitions have been calculated."
+	[token-specs meta-tokens]
+	(struct fsm-state
+		(reduce
+			(fn
+				[set [name & rule]]
+				(apply conj set (flatten-paths name (enum-states (expand-meta-tokens rule meta-tokens) nil))))
+			#{}
+			token-specs)))
 
 (defn token-rule-map
     [tokens meta-tokens]
     (reduce (fn [m [name & rule]] (assoc m name (expand-meta-tokens rule meta-tokens))) {} tokens))
 
+(defn range-rule? [rule]
+	(and (vector? rule) (= :range (first rule))))
+
 (defn create-char-transition-map
-    [states token-map]
-    (reduce
-        (fn
-            [char-map [name path]]
-            (let [rule (token-map name)]
-                (if (= :eot path)
-                    char-map
-                    (update-in
-                        char-map
-                        [(in-rule rule path)]
-                        #(apply util/set-conj %1 %2)
-                        (flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path)))))))
-        {}
-        states))
+	"Given the set of rule states, produces a map of character transitions to other states."
+	[states token-map]
+	(reduce
+		(fn
+			[char-map [name path]]
+			(let [rule (token-map name)]
+				(if
+					(= :eot path)
+						char-map
+					(let [term (in-rule rule path)]
+						(cond
+							(char? term)
+								; add the post-transition state to the character entry in the transition table, creating an entry if necessary
+								(update-in
+									char-map
+									[(rangemap/char-range term)]
+									#(apply util/set-conj %1 %2)
+									(flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path))))
+							(range-rule? term)
+								(update-in
+									char-map
+									[(apply rangemap/char-range (rest term))] ; convert inclusive range to one usable by range-map
+									#(apply util/set-conj %1 %2)
+									(flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path))))
+							:else
+								(do
+									(println "Unknown terminal type: " term " - ignoring.")
+									char-map))))))
+		(rangemap/range-map)
+		states))
 
 (defn register-state-from-transition
     [[state-vector state-map] state]
@@ -195,16 +224,20 @@
         [state-vector state-map]))
 
 (defn generate-state-machine
-    [tokens meta-tokens]
-    (loop [state-vector [(initial-state tokens meta-tokens)]
-           state-map {(:state (state-vector 0)) 0}
-           idx 0]
-        (if (>= idx (count state-vector))
-            [state-vector state-map]
-            (let [current-state (state-vector idx)
-                  transition-map (create-char-transition-map (:state current-state) (token-rule-map tokens meta-tokens))
-                  [state-vector state-map] (register-states current-state transition-map state-vector state-map)]
-                (recur state-vector state-map (inc idx))))))
+	[tokens meta-tokens]
+	"Given the specified token and meta-token grammars, produces the entire state table"
+	(loop [state-vector [(initial-state tokens meta-tokens)] ; build the initial state object
+				 state-map {(:state (state-vector 0)) 0} ; initial state has index 0, allow indexing by rule state
+				 idx 0] ; current state to inspect
+		(if (>= idx (count state-vector))
+			[state-vector state-map] ; the number of inspected states has caught up with the produced states. -> no remaining reachable states.
+			(let
+				[current-state (state-vector idx)
+				 ; inspect the current state for allowed characters, and which states they lead to
+				 transition-map (create-char-transition-map (:state current-state) (token-rule-map tokens meta-tokens))
+				 ; expand the set of available states if additional ones were discovered in the previous step
+				 [state-vector state-map] (register-states current-state transition-map state-vector state-map)]
+				(recur state-vector state-map (inc idx))))))
 
 ; java lexical structure from
 ; http://java.sun.com/docs/books/jls/third_edition/html/lexical.html
@@ -212,7 +245,7 @@
 (def *java-meta-tokens*
     (hash-map
         'LineTerminator '(| "\r" "\n" "\r\n" )
-        'DecimalDigit (list* '| (map str (range 0 10)))))
+        'DecimalDigit [:range \0 \9]))
 
 (def *java-tokens*
     (concat
