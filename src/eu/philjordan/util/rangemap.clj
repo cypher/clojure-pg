@@ -29,7 +29,7 @@
 	(cond
 		(<= (compare end key) 0)
 			-1
-		(< (compare key start) 0)
+		(neg? (compare key start))
 			1
 		:else
 			0))
@@ -63,6 +63,18 @@
 	"Inclusive character range"
 	[from to]
 	[from (char (inc (int to)))])
+
+(defn overlaps
+	"Returns a seq of all ranges in the rmap overlapped by the given range"
+	[rmap [start end]]
+	; search inclusive of end because of weird key/range comparison rules
+	(let [inc-overlaps (subseq rmap >= start <= end)]
+		; now drop the last range if it was included erroneously
+	  ; e.g. range [64 65] does not overlap [65 90] whereas [64 66] does.
+		(if-not (pos? (compare end (ffirst (last inc-overlaps))))
+			(butlast inc-overlaps)
+			inc-overlaps)))
+	
 
 ; everything below: INCOMPLETE
 
