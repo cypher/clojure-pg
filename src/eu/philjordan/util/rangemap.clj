@@ -47,6 +47,23 @@
 			; a is not seqable, treat it as key
 			(- (range-map-key-compare b a)))))
 
+(defn range-map
+	"Range-keyed map with no overlaps allowed. Initialisation, assoc, update-in,
+   etc. must use ranges as keys; get, find, dissoc, etc. may alternatively use
+	 single values; these will match the range into which they fall."
+	[& kvs]
+	(apply sorted-map-by range-map-compare kvs))
+
+; example:
+; (rangemap/range-map
+;		(rangemap/char-range \0 \9) "digit"
+;		(rangemap/char-range \a \z) "lcase"
+;		(rangemap/char-range \A \Z) "ucase")
+(defn char-range
+	"Inclusive character range"
+	[from to]
+	[from (char (inc (int to)))])
+
 ; everything below: INCOMPLETE
 
 ; range-based multimap. Keys are specified as ranges, Lookup of a key will
