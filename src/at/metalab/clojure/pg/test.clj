@@ -149,7 +149,8 @@
 				[set [name & rule]]
 				(apply conj set (flatten-paths name (enum-states (expand-meta-tokens rule meta-tokens) nil))))
 			#{}
-			token-specs)))
+			token-specs)
+		(rangemap/range-map)))
 
 (defn token-rule-map
     [tokens meta-tokens]
@@ -202,7 +203,7 @@
 	[[state-vector state-map] state]
 	(if (state-map state)
 		[state-vector state-map]
-		[(assoc state-vector (count state-vector) (struct-map fsm-state :state state :transitions {}))
+		[(assoc state-vector (count state-vector) (struct-map fsm-state :state state :transitions (rangemap/range-map)))
 		 (assoc state-map state (count state-vector))]))
 
 (defn register-state-transitions
@@ -214,7 +215,7 @@
                 (update-in
                     v
                     [from-state-idx :transitions]
-                    assoc
+                    (fn [m k val] (when-not m (prn "warn:" from-state-idx v)) (assoc m k val))
                     char (state-map state)))
             state-vector
             transitions)))
@@ -248,6 +249,52 @@
 				 ; expand the set of available states if additional ones were discovered in the previous step
 				 [state-vector state-map] (register-states current-state transition-map state-vector state-map)]
 				(recur state-vector state-map (inc idx))))))
+
+(defn completed-tokens
+	[rule-states consumed remain]
+	; pick out all token types which are in end-of-token state
+	(let
+		[end-states (filter #(= :eot (second %)) rule-states)
+	   s (when end-states (apply str (reverse consumed)))]
+		(map #(hash-map :type (first %) :name s  :remain remain)
+			end-states)))
+
+(defn compare-tokens-by-len
+	[{a :name  at :type } {b :name  bt :type}]
+	(let [cmp (- (compare (count a) (count b)))]
+		(if-not (zero? cmp) cmp
+			(compare at bt))))
+
+(defn produce-token [state-vector char-stream]
+	(loop
+		[state-idx 0
+		 consumed-chars nil
+		 chars (seq char-stream)
+	   ; sort by length, descending
+		 produced-tokens (sorted-set-by compare-tokens-by-len)]
+		(if-not chars
+			produced-tokens
+			(let
+				[ch (first chars)
+				 { trans :transitions } (state-vector state-idx)
+				 to-idx (get trans ch)
+				 to-rule-states (when to-idx (:state (state-vector to-idx)))]
+				(if
+					(or
+						(zero? (count trans)) ; dead end, no more transitions
+						(not to-idx)) ; dead end, this char isn't a valid state transition
+					produced-tokens
+					; move to new state
+					(let
+						[consumed (cons ch consumed-chars)
+						 remain (rest chars)
+						 completed (completed-tokens to-rule-states consumed remain)
+						 tokens
+							(if (empty? completed)
+								produced-tokens
+								(apply conj produced-tokens completed))]
+						(recur to-idx consumed remain tokens)))))))
+				
 
 ; java lexical structure from
 ; http://java.sun.com/docs/books/jls/third_edition/html/lexical.html
