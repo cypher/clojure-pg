@@ -110,18 +110,22 @@
 	"Returns a seq of any gaps between the ranges in range-seq on the interval range.
 	 range-seq is an ordered seq of ranges."
 	[[start end :as range] range-seq]
-	(if (empty? range-seq)
-		(list range)
-		(let [[rst rend] (first range-seq)]
-			(if (cmp< start rst) ; gap before range item
-				(lazy-seq
-					(cons [start (cmp-min rst end)]
-						(when (cmp< rend end)
-							(range-gaps [rend end] (rest range-seq)))))
-				; no gap, skip range
-				(recur [(cmp-max rend start) end] (rest range-seq))))))
+	(cond
+		(= start end)
+			nil
+		(empty? range-seq)
+			(list range)
+		:else
+			(let [[rst rend] (first range-seq)]
+				(if (cmp< start rst) ; gap before range item
+					(lazy-seq
+						(cons [start (cmp-min rst end)]
+							(when (cmp< rend end)
+								(range-gaps [rend end] (rest range-seq)))))
+					; no gap, skip range
+					(recur [(cmp-max rend start) end] (rest range-seq))))))
 
-(defn update-rmap
+(defn update-range
 	"Ensures the range is covered in rmap by inserting any missing ranges.
    New and updated values corresponding to ranges are computed by calling f with
    the old value and supplied extra args. Works similarly to update-in, except f
