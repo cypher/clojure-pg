@@ -197,11 +197,13 @@
 		states))
 
 (defn register-state-from-transition
-    [[state-vector state-map] state]
-    (if (state-map state)
-        [state-vector state-map]
-        [(assoc state-vector (count state-vector) (struct-map fsm-state :state state :transitions {}))
-         (assoc state-map state (count state-vector))]))
+	"Checks if the given state already exists, and if not, appends it to the state
+   vector, and enters it into the state map."
+	[[state-vector state-map] state]
+	(if (state-map state)
+		[state-vector state-map]
+		[(assoc state-vector (count state-vector) (struct-map fsm-state :state state :transitions {}))
+		 (assoc state-map state (count state-vector))]))
 
 (defn register-state-transitions
     [from-state transitions state-vector state-map]
@@ -218,16 +220,18 @@
             transitions)))
 
 (defn register-states
-    [from-state transition-map state-vector state-map]
-    (let
-        [states (vals transition-map)
-         [state-vector state-map]
-            (reduce
-                register-state-from-transition
-                [state-vector state-map]
-                states)
-         state-vector (register-state-transitions from-state transition-map state-vector state-map)]
-        [state-vector state-map]))
+	"Adds any newly created states to the state vector & map, adds the
+   discovered transition-map to the state object"
+	[from-state transition-map state-vector state-map]
+	(let
+		[states (vals transition-map)
+		 [state-vector state-map]
+			(reduce
+				register-state-from-transition
+				[state-vector state-map]
+				states)
+		 state-vector (register-state-transitions from-state transition-map state-vector state-map)]
+		[state-vector state-map]))
 
 (defn generate-state-machine
 	[tokens meta-tokens]
