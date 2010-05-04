@@ -242,3 +242,17 @@
 (defn codepoint-array
 	"Returns the code points constituting the string as an array of ints"
 	[s] (int-array (codepoint-seq s)))
+
+; (compare)-based inequality functions. Unlike < > <= >= they work on anything comparable, not just numbers
+(defn cmp< [a b]
+	(neg? (compare a b)))
+(defn cmp> [a b]
+	(cmp< b a))
+(defn cmp<= [a b]
+	(not (cmp> a b)))
+(defn cmp>= [a b]
+	(not (cmp< a b)))
+(defn cmp-min [a b]
+	(if (cmp<= a b) a b))
+(defn cmp-max [a b]
+	(if (cmp>= a b) a b))

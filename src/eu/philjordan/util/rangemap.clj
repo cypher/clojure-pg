@@ -1,8 +1,6 @@
 
 (ns eu.philjordan.util.rangemap
-  ;(:require )
-  ;(:use )
-  ;(:import )
+  (:use [eu.philjordan.util :only (cmp> cmp< cmp>= cmp<= cmp-min cmp-max prrn)])
   )
 
 ; range-based map. A sorted-map where keys are simple [start end] vectors, where
@@ -70,13 +68,71 @@
 	"Returns a seq of all ranges in the rmap overlapped by the given range"
 	[rmap [start end]]
 	; search inclusive of end because of weird key/range comparison rules
-	(let [inc-overlaps (subseq rmap >= start <= end)]
+	(let [inc-overlaps (keys (subseq rmap >= start <= end))]
 		; now drop the last range if it was included erroneously
 	  ; e.g. range [64 65] does not overlap [65 90] whereas [64 66] does.
-		(if-not (pos? (compare end (ffirst (last inc-overlaps))))
+		(if-not (pos? (compare end (first (last inc-overlaps))))
 			(butlast inc-overlaps)
 			inc-overlaps)))
-	
+
+(defn split-range
+	"Splits range (which must exist) in rmap at split-at"
+	[rmap [start end :as range] split-at]
+	(let [val (get rmap range)]
+		(assoc (dissoc rmap range)
+			[start split-at] val
+			[split-at end] val)))
+
+(defn need-split-range
+	"Returns the range, if any, which can be split at pos. If pos is at the upper or lower boundary of a range, it is not considered for splitting."
+	[rmap pos]
+	(let [[[s e :as range] val] (find rmap pos)] ; find the range which might need splitting
+		(when (and range (cmp> pos s) (cmp< pos e)) ; the last term is probably redundant
+			range)))
+
+(defn split-range-at
+	"If a range overlaps split-at, split it, otherwise return rmap unchanged"
+	[rmap split-at]
+	(if-let [range (need-split-range rmap split-at)]
+		(split-range rmap range split-at)
+		rmap))
+
+(defn split-ranges-at
+	([rmap]
+		rmap)
+	([rmap & split-positions]
+		(loop [rmap rmap  [split-at & split-rest] split-positions]
+			(let [nmap (split-range-at rmap split-at)]
+				(if-not split-rest nmap
+					(recur nmap split-rest))))))
+
+(defn range-gaps
+	"Returns a seq of any gaps between the ranges in range-seq on the interval range.
+	 range-seq is an ordered seq of ranges."
+	[[start end :as range] range-seq]
+	(if (empty? range-seq)
+		(list range)
+		(let [[rst rend] (first range-seq)]
+			(if (cmp< start rst) ; gap before range item
+				(lazy-seq
+					(cons [start (cmp-min rst end)]
+						(when (cmp< rend end)
+							(range-gaps [rend end] (rest range-seq)))))
+				; no gap, skip range
+				(recur [(cmp-max rend start) end] (rest range-seq))))))
+
+(defn update-rmap
+	"Ensures the range is covered in rmap by inserting any missing ranges.
+   New and updated values corresponding to ranges are computed by calling f with
+   the old value and supplied extra args. Works similarly to update-in, except f
+   may be called multiple times."
+	[rmap [start end :as r] f & args]
+	(let
+		[rmap (split-ranges-at rmap start end) ; split ranges overlapping start and end
+	   o (overlaps rmap r) ; parts of the range which already exist
+		 g (range-gaps r o)] ; parts of the range which are new
+		(reduce #(apply update-in %1 [%2] f args)
+			rmap (concat o g))))
 
 ; everything below: INCOMPLETE
 
