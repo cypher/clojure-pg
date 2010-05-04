@@ -158,6 +158,14 @@
 (defn range-rule? [rule]
 	(and (vector? rule) (= :range (first rule))))
 
+(defn insert-range-dest-states
+	"Insert the given range into the character range map, taking care of any overlap."
+	[cr-map range add-states]
+	;(prn 'insert-range-dest-states cr-map range add-states)
+	(apply
+		rangemap/update-range cr-map range
+		util/set-conj add-states))
+
 (defn create-char-transition-map
 	"Given the set of rule states, produces a map of character transitions to other states."
 	[states token-map]
@@ -172,16 +180,14 @@
 						(cond
 							(char? term)
 								; add the post-transition state to the character entry in the transition table, creating an entry if necessary
-								(update-in
+								(insert-range-dest-states
 									char-map
-									[(rangemap/char-range term)]
-									#(apply util/set-conj %1 %2)
+									(rangemap/char-range term)
 									(flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path))))
 							(range-rule? term)
-								(update-in
+								(insert-range-dest-states
 									char-map
-									[(apply rangemap/char-range (rest term))] ; convert inclusive range to one usable by range-map
-									#(apply util/set-conj %1 %2)
+									(apply rangemap/char-range (rest term)) ; convert inclusive range to one usable by range-map
 									(flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path))))
 							:else
 								(do
@@ -243,29 +249,35 @@
 ; http://java.sun.com/docs/books/jls/third_edition/html/lexical.html
 
 (def *java-meta-tokens*
-    (hash-map
-        'LineTerminator '(| "\r" "\n" "\r\n" )
-        'DecimalDigit [:range \0 \9]))
+	(hash-map
+		'LineTerminator '(| "\r" "\n" "\r\n" )
+		'DecimalDigit [:range \0 \9]
+		'Alpha '(| [:range \A \Z] [:range \a \z])
+		'Alnum '(| Alpha DecimalDigit)))
 
 (def *java-tokens*
-    (concat
-        (map ltok
-            (list
-                ; logic/bitwise
-                "||" "&&" "|" "^" "&"
-                ; comparison
-                "==" "!=" "<" ">" "<=" ">="
-                ; arithmetic
-                "<<" ">>" ">>>" "+" "-" "*" "/" "%"
-                ; assignment
-                "=" "+=" "-=" "*=" "/=" "&=" "|=" "^=" "%=" "<<=" ">>=" ">>>="))
-        (list
-            ;; '(EOLCOMMENT "//" (* (! LineTerminator)) LineTerminator)
-            '(INTEGER (+ DecimalDigit))
-            '(FLOAT
-                (|
-                    ((+ DecimalDigit) "." (* DecimalDigit))
-                    ((* DecimalDigit) "." (+ DecimalDigit)))))))
+	(concat
+		(map ltok
+				(list
+						; logic/bitwise
+						"||" "&&" "|" "^" "&"
+						; comparison
+						"==" "!=" "<" ">" "<=" ">="
+						; arithmetic
+						"<<" ">>" ">>>" "+" "-" "*" "/" "%"
+						; assignment
+						"=" "+=" "-=" "*=" "/=" "&=" "|=" "^=" "%=" "<<=" ">>=" ">>>="))
+		(list
+			;; '(EOLCOMMENT "//" (* (! LineTerminator)) LineTerminator)
+			'(INTEGER (+ DecimalDigit))
+			'(FLOAT
+					(|
+							((+ DecimalDigit) "." (* DecimalDigit))
+							((* DecimalDigit) "." (+ DecimalDigit))))
+			'(IDENTIFIER
+				(Alpha (* Alnum)))
+			'(KEYWORD
+				(| "public" "private" "static")))))
 
 ; basic java grammar taken from
 ; http://java.sun.com/docs/books/jls/second_edition/html/syntax.doc.html
