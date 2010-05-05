@@ -265,7 +265,7 @@
 		(if-not (zero? cmp) cmp
 			(compare at bt))))
 
-(defn produce-token [state-vector char-stream]
+(defn produce-possible-tokens [state-vector char-stream]
 	(loop
 		[state-idx 0
 		 consumed-chars nil
@@ -294,7 +294,38 @@
 								produced-tokens
 								(apply conj produced-tokens completed))]
 						(recur to-idx consumed remain tokens)))))))
-				
+
+(defn token-transitions-table
+	[state-vector]
+	(let
+		; count incoming transitions into each FSM state
+		[incoming-transitions-by-state
+			(reduce
+				(fn [v {t :transitions}]
+					; for each transition, count eligible chars and credit them to destination
+					(reduce
+						(fn [v [[start end] dest]]
+							(update-in v [dest] + (- (int end) (int start))))
+						v
+						t))
+				; vector with incoming transition count for each state. Always start at state 0, so it starts with 1 incoming.
+				(assoc (vec (repeat (count state-vector) 0)) 0 1)
+				state-vector)]
+		; for each rule state in an FSM state, multiply the transitions for that rule by that FSM state's incoming transitions
+		(reduce
+			; iterate through FSM states
+			(fn [m [{rule-states :state} num-transitions]]
+				(reduce
+					(fn [m [rule]]
+						(assoc m rule
+							(*
+								(get m rule 1) ; transitions for that rule so far, defaulting to 1
+								num-transitions)))
+					m
+					rule-states))
+			{}
+			(util/cluster-seq 2 (interleave state-vector incoming-transitions-by-state)))))
+
 
 ; java lexical structure from
 ; http://java.sun.com/docs/books/jls/third_edition/html/lexical.html
@@ -309,17 +340,17 @@
 (def *java-tokens*
 	(concat
 		(map ltok
-				(list
-						; logic/bitwise
-						"||" "&&" "|" "^" "&"
-						; comparison
-						"==" "!=" "<" ">" "<=" ">="
-						; arithmetic
-						"<<" ">>" ">>>" "+" "-" "*" "/" "%"
-						; assignment
-						"=" "+=" "-=" "*=" "/=" "&=" "|=" "^=" "%=" "<<=" ">>=" ">>>="))
+			(list
+				; logic/bitwise
+				"||" "&&" "|" "^" "&"
+				; comparison
+				"==" "!=" "<" ">" "<=" ">="
+				; arithmetic
+				"<<" ">>" ">>>" "+" "-" "*" "/" "%"
+				; assignment
+				"=" "+=" "-=" "*=" "/=" "&=" "|=" "^=" "%=" "<<=" ">>=" ">>>="))
 		(list
-			;; '(EOLCOMMENT "//" (* (! LineTerminator)) LineTerminator)
+			'(EOLCOMMENT "//" (* [:not LineTerminator]) LineTerminator)
 			'(INTEGER (+ DecimalDigit))
 			'(FLOAT
 					(|
