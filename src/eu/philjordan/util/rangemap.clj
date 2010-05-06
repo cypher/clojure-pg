@@ -52,6 +52,12 @@
 	[& kvs]
 	(apply sorted-map-by range-map-compare kvs))
 
+(defn range-set
+	"Sorted set of ranges with no overlaps allowed."
+	[& ranges]
+	(apply sorted-set-by range-map-compare ranges))
+
+
 ; example:
 ; (rangemap/range-map
 ;		(rangemap/char-range \0 \9) "digit"

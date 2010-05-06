@@ -159,6 +159,9 @@
 (defn range-rule? [rule]
 	(and (vector? rule) (= :range (first rule))))
 
+(defn inversion-rule? [rule]
+	(and (vector? rule) (= :not (first rule))))
+
 (defn insert-range-dest-states
 	"Insert the given range into the character range map, taking care of any overlap."
 	[cr-map range add-states]
@@ -190,6 +193,24 @@
 									char-map
 									(apply rangemap/char-range (rest term)) ; convert inclusive range to one usable by range-map
 									(flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path))))
+							(inversion-rule? term)
+								; The [:not ...] rule contains a sequence of ranges or literals, which must be inverted
+								(let
+									; first, convert everything to [start, end) ranges and sort them (]
+									[ranges
+										(apply rangemap/range-set (map
+											#(if (char? %) (rangemap/char-range %) (apply rangemap/char-range %))
+											(rest term)))
+									 inverted-ranges
+										(rangemap/range-gaps
+											[(char java.lang.Character/MIN_VALUE) (char java.lang.Character/MAX_VALUE)]
+											ranges)
+									 next-paths (flatten-paths name (mapcat #(enum-states rule %) (advance-path rule path)))]
+									;(prn inverted-ranges)
+									(reduce
+										#(insert-range-dest-states %1 %2 next-paths)
+										char-map
+										inverted-ranges))
 							:else
 								(do
 									(println "Unknown terminal type: " term " - ignoring.")
@@ -350,12 +371,12 @@
 				; assignment
 				"=" "+=" "-=" "*=" "/=" "&=" "|=" "^=" "%=" "<<=" ">>=" ">>>="))
 		(list
-			'(EOLCOMMENT "//" (* [:not LineTerminator]) LineTerminator)
+			'(EOLCOMMENT "//" (* [:not \return \newline]) LineTerminator)
 			'(INTEGER (+ DecimalDigit))
 			'(FLOAT
-					(|
-							((+ DecimalDigit) "." (* DecimalDigit))
-							((* DecimalDigit) "." (+ DecimalDigit))))
+				(|
+					((+ DecimalDigit) "." (* DecimalDigit))
+					((* DecimalDigit) "." (+ DecimalDigit))))
 			'(IDENTIFIER
 				(Alpha (* Alnum)))
 			'(KEYWORD
