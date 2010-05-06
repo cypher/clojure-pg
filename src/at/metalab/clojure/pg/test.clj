@@ -353,6 +353,7 @@
 					(cons tok (read-tokens state-vector token-transitions rem))
 					(list (struct token 'TOKENIZATION-ERROR (apply str char-stream))))))))
 
+
 (defn token-transitions-table
 	[state-vector]
 	(let
@@ -383,6 +384,13 @@
 					rule-states))
 			{}
 			(util/cluster-seq 2 (interleave state-vector incoming-transitions-by-state)))))
+
+(defn lexer [token-rules meta-token-rules]
+	(let
+		[[state-vector] (generate-state-machine token-rules meta-token-rules)
+	   transitions (token-transitions-table state-vector)]
+		(fn generated-lexer [chars]
+			(read-tokens state-vector transitions chars))))
 
 
 ; java lexical structure from
