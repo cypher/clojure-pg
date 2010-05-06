@@ -10,6 +10,11 @@
                     ;; The value is the index of the resulting state
     )
 
+(defstruct token
+	:type
+	:str
+	)
+
 (defn ltok
     "generate a token spec for a literal token; the token will use the uppercased string for its symbol"
     [s]
@@ -286,7 +291,9 @@
 		(if-not (zero? cmp) cmp
 			(compare at bt))))
 
-(defn produce-possible-tokens [state-vector char-stream]
+(defn produce-possible-tokens
+	"Generates a set of possible tokens that could be produced by consuming the first characters of char-stream"
+	[state-vector char-stream]
 	(loop
 		[state-idx 0
 		 consumed-chars nil
@@ -315,6 +322,36 @@
 								produced-tokens
 								(apply conj produced-tokens completed))]
 						(recur to-idx consumed remain tokens)))))))
+
+(defn produce-token
+	"Produces a token, if possible, by consuming a many characters of char-stream
+   as possible using the state-vector and breaking ties using the
+   token-transitions table."
+	[state-vector token-transitions char-stream]
+	(let [possible-tokens (produce-possible-tokens state-vector char-stream)]
+		(when-not (empty? possible-tokens)
+			(let
+				[ref-tok (first possible-tokens)
+		     len (count (:name ref-tok))
+				 ; list of all tokens with the same length as the first
+				 tie-toks (filter #(= len (count (:name %))) (rest possible-tokens))
+				 ; pick out token with fewest transitions
+		     {type :type  name :name  rem :remain}
+				  (if tie-toks
+						(apply min-key
+								#(token-transitions (:type %))
+								ref-tok tie-toks)
+						ref-tok)]
+				[(struct token type name) rem]))))
+
+(defn read-tokens
+	[state-vector token-transitions char-stream]
+	(when-not (empty? char-stream)
+		(lazy-seq
+			(let [[tok rem] (produce-token state-vector token-transitions char-stream)]
+				(if tok
+					(cons tok (read-tokens state-vector token-transitions rem))
+					(list (struct token 'TOKENIZATION-ERROR (apply str char-stream))))))))
 
 (defn token-transitions-table
 	[state-vector]
