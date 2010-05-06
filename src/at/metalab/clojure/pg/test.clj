@@ -385,13 +385,31 @@
 			{}
 			(util/cluster-seq 2 (interleave state-vector incoming-transitions-by-state)))))
 
-(defn lexer [token-rules meta-token-rules]
+(defn lexer
+	"Returns a lexer for the given token and meta-token rules, which is a function
+   taking a character sequence and returning a lazy sequence of tokens."
+	[token-rules meta-token-rules]
 	(let
 		[[state-vector] (generate-state-machine token-rules meta-token-rules)
 	   transitions (token-transitions-table state-vector)]
 		(fn generated-lexer [chars]
 			(read-tokens state-vector transitions chars))))
 
+(defn advance-pos-by-str [str line pos]
+	(let [newlines (re-seq #"(?:\r\n|[\n\r])([^\r\n]*)" str)]
+		(if newlines
+			(list (+ line (count newlines))  (count (second (last newlines))))
+			(list line  (+ pos (count str))))))
+
+(defn annotate-token-seq-charpos
+	([token-seq]
+		(annotate-token-seq-charpos token-seq 0 0))
+	([token-seq start-line start-pos]
+		(when-not (empty? token-seq)
+			(lazy-seq
+				(let [[{ s :str  :as tok } & more-tok] token-seq]
+					(cons (assoc tok  :line start-line  :pos start-pos)
+						(apply annotate-token-seq-charpos more-tok (advance-pos-by-str s start-line start-pos))))))))
 
 ; java lexical structure from
 ; http://java.sun.com/docs/books/jls/third_edition/html/lexical.html
