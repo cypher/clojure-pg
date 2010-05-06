@@ -411,6 +411,11 @@
 					(cons (assoc tok  :line start-line  :pos start-pos)
 						(apply annotate-token-seq-charpos more-tok (advance-pos-by-str s start-line start-pos))))))))
 
+(defn linecounting-lexer [token-rules meta-token-rules]
+	(let [lex (lexer token-rules meta-token-rules)]
+		(fn generated-linecounting-lexer [chars]
+			(annotate-token-seq-charpos (lex chars)))))
+
 ; java lexical structure from
 ; http://java.sun.com/docs/books/jls/third_edition/html/lexical.html
 
